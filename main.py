@@ -1,16 +1,26 @@
-# This is a sample Python script.
-
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.error_handles import register_error_handlers
+from app.core.config import settings
+from app.core.logging import configure_logging, get_logger
+from app.routes import health
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+def create_app()-> FastAPI:
+    configure_logging()
+    logger = get_logger(__name__)
+    app = FastAPI(title=settings.app_name)
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cores_origin_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    register_error_handlers(app)
+    app.include_router(health.router,prefix="/api")
+    logger.info("app start complete")
+    return app
+
+app = create_app()
