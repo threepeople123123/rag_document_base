@@ -39,6 +39,10 @@ class Setting(BaseSettings):
     EMBEDDING_BASE_URL:str = "https://llm-3l2i84ztuewo30qg.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
     EMBEDDING_MODEL_NAME:str = "qwen3.7-text-embedding"
     EMBEDDING_DIMENSIONS:int = 1024
+    CHUNK_SIZE:int = 600
+    CHUNK_OVERLAP:int = 60
+
+    UPLOAD_MAX_SIZE_MB:int = 10
 
 
 

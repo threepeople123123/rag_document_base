@@ -1,6 +1,7 @@
 from minio import S3Error
 
 from app.api.error_handles import logger
+from app.core.config import settings
 from app.store.minio_client import MinioClient, get_minio_client
 
 
@@ -12,8 +13,9 @@ class FileService:
     def get_bucket(self):
         return self._client.get_bucket()
 
-    def region(self):
-        return self.region()
+    def region(self)->str:
+        # 配置文件里面写死
+        return settings.REGION
 
     @staticmethod
     def build_object_name(self,file_hash:str,suffix:str)->str:

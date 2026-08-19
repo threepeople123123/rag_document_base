@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.error_handles import register_error_handlers
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
-from app.routes import health
+from app.routes import health, documents
 
 
 def create_app()-> FastAPI:
@@ -19,6 +19,7 @@ def create_app()-> FastAPI:
         allow_headers=["*"],
     )
     register_error_handlers(app)
+    app.include_router(documents.router,prefix="/api")
     app.include_router(health.router,prefix="/api")
     logger.info("app start complete")
     return app

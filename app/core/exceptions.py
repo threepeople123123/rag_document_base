@@ -33,3 +33,8 @@ class ConfigurationError(AppException):
     message:str = "服务配置缺失"
     http_status :int = HTTPStatus.SERVICE_UNAVAILABLE
 
+class ValidationError(AppException):
+    code: str = "validation_error"
+    message: str = "参数校验失败"
+    http_status: int = HTTPStatus.BAD_REQUEST
+
