@@ -9,7 +9,7 @@ from app.core.config import settings
 def _build_splitter()->RecursiveCharacterTextSplitter:
     return RecursiveCharacterTextSplitter(
         chunk_size=settings.CHUNK_SIZE,
-        chunked_overlay=settings.CHUNK_OVERLAP,
+        chunk_overlap=settings.CHUNK_OVERLAP,
         separators=["\n\n","\n","。","，","！","？","：","；"," ",""],
         length_function=len,
         is_separator_regex=False

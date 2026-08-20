@@ -18,7 +18,7 @@ class FileService:
         return settings.REGION
 
     @staticmethod
-    def build_object_name(self,file_hash:str,suffix:str)->str:
+    def build_object_name(file_hash:str,suffix:str)->str:
         return f"document/{file_hash}{suffix}"
 
     # 下载文件
@@ -27,7 +27,7 @@ class FileService:
 
     # 上传文件
     async def upload(self,*,content:bytes,file_hash:str,suffix:str,mine_type:str)->str:
-        object_key = self.build_object_name(file_hash,suffix)
+        object_key = self.build_object_name(file_hash=file_hash,suffix=suffix)
         await self._client.put_object(object_key,content,content_type=mine_type)
         return object_key
 

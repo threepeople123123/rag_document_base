@@ -1,5 +1,4 @@
 from functools import lru_cache
-from operator import ifloordiv
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,6 +42,13 @@ class Setting(BaseSettings):
     CHUNK_OVERLAP:int = 60
 
     UPLOAD_MAX_SIZE_MB:int = 10
+
+    CHAT_API_KEY:str="sk-0363d3e4787e4ab19253e56309e0ff95"
+    CHAT_BASE_URL:str = ""
+    CHAT_MODEL:str = ""
+    RETRIEVAL_TOP_K:str = ""
+    RETRIEVAL_MIN_SCORE:str =""
+    CHAT_HISTORY_WINDOW:str =""
 
 
 

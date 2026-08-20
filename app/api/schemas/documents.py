@@ -16,8 +16,8 @@ class DocumentRead(BaseModel):
     size:int
     status:DocumentStatus
     error_message:str|None = None
-    create_at : datetime
-    update_at:datetime
+    created_at : datetime
+    updated_at:datetime
 
 class DocumentListResponse(BaseModel):
     items:list[DocumentRead]

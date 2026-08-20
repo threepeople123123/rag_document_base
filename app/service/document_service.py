@@ -69,7 +69,7 @@ class DocumentService:
         """
         suffix , content_type = _resolve_mime_and_suffix(file)
         content = await file.read()
-        max_size = settings.UPLOAD_MAX_SIZE_MB * 1024
+        max_size = settings.UPLOAD_MAX_SIZE_MB * 1024 * 1024
         if len(content) < 0:
             raise ValidationError("文件为空，请重新上传")
         elif len(content) > max_size:

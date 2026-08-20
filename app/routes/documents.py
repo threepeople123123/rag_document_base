@@ -1,14 +1,15 @@
+from pathlib import PurePath
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Query,Response
-from openai.types.responses import response_error
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Query, Response
 
 from app.api.deps import DbSession
 from app.api.schemas.documents import DocumentRead, DocumentListResponse
 from app.db.models import DocumentStatus
 from app.service.document_service import DocumentService
-from app.store.file_service import FileService
 
+_DOC_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 router = APIRouter(prefix="/documents",tags=["documents"])
 
 @router.post("",response_model=DocumentRead,status_code=201,operation_id="uploadDocument")
@@ -58,7 +59,7 @@ async def retry_document(
     return DocumentRead.model_validate(document)
 
 @router.get("/{document_id}/file",operation_id="downloadDocument")
-async def download_document(document_id: UUID,session:DbSession)->Response:
+async def download_document(document_id: UUID,session:DbSession,downlaod:int=Query(0,ge=0,le=1,description="1=强制下载，0=内尝试内敛预览"))->Response:
     document_service = DocumentService(session)
 
     document = await document_service.get(document_id)
@@ -67,9 +68,23 @@ async def download_document(document_id: UUID,session:DbSession)->Response:
 
     content = await document_service.file_service.download(document.cos_object_key)
 
+    suffix = PurePath(document.name or "").suffix.lower()
+
+
+    force_attachment = downlaod ==1 or (document.mime_type == _DOC_MIME or suffix in [".doc",".docx"])
+    disposition = "attachment" if force_attachment else "init"
+    filename_quoted = quote(document.name,safe="")
 
     return Response(
-        content=content
+        content=content,
+        media_type=document.mime_type,
+        headers={
+            "Content-Disposition" :(
+                f"{disposition};filename*=UTF-8''{filename_quoted}"
+            )
+        }
     )
+
+
 
 

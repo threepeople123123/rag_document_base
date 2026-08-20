@@ -1,5 +1,6 @@
 import asyncio
 from datetime import timedelta
+from io import BytesIO
 from typing import BinaryIO
 
 from minio import Minio
@@ -59,7 +60,7 @@ class MinioClient:
             self._client.put_object,
             bucket,
             object_name,
-            data,
+            BytesIO(data),
             length,
             content_type=content_type,
         )

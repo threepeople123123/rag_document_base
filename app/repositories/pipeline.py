@@ -75,6 +75,6 @@ async def ingest_document(document_id:UUID)->None:
        await _set_status(document_id,DocumentStatus.READY,error_message=None)
        logger.info("文档解析完成")
     except Exception as e:
-        logger.error("文档解析失败")
+        logger.error("文档解析失败",str(e))
         message = str(e).strip() or e.__class__.__name__
         await _set_status(document_id,DocumentStatus.FAILED,error_message=message)
