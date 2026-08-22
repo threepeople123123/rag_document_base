@@ -1,10 +1,7 @@
-from turtledemo.penrose import start
-from typing import LiteralString
-
-from antlr4 import ListTokenSource
+from langchain_core.messages import BaseMessage, AIMessage, SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from openpyxl.worksheet import page
 
+from app.db.models import Message, MessageRole
 from app.retrieval.vector_retrieval import RetrievalChunk
 
 _SYSTEM_PROMPT = """ 
@@ -41,7 +38,7 @@ _SYSTEM_PROMPT = """
     {context}
 """
 
-RAG_ANSWER_PROMPT = ChatPromptTemplate.format_prompt(
+RAG_ANSWER_PROMPT = ChatPromptTemplate.format_messages(
     [
         ("system",_SYSTEM_PROMPT),
         MessagesPlaceholder("chat_history",optional=True),
@@ -53,8 +50,38 @@ RAG_ANSWER_PROMPT = ChatPromptTemplate.format_prompt(
 def format_context(chunks:list[RetrievalChunk]) -> str:
     if not chunks:
         return "暂无"
+    parts: list[str] = []
     for index , chunk in enumerate(chunks,start =1):
         mate = f"来自{chunk.document_name}"
         if not chunk.page_no:
             mate += f"，第{chunk.page_no}页"
+        if not chunk.section_path:
+            mate += f",第{chunk.section_path}章节"
+        parts.append(f"【片段{index}】({mate}),\n{chunk.content}")
+    return "\n\n ---- \n\m".join(parts)
+
+
+def history_to_message(history:list[Message]) ->list[BaseMessage]:
+    messages :list[BaseMessage] = []
+    for msg in  history:
+        if msg.role == MessageRole.ASSISTANT:
+            messages.append(AIMessage(content=msg.content))
+        if msg.role == MessageRole.USER:
+            messages.append(HumanMessage(content=msg.content))
+        if msg.role == MessageRole.SYSTEM:
+            messages.append(SystemMessage(content=msg.content))
+    return messages
+
+
+def build_answer_message(question:str,chunks:list[RetrievalChunk],history:list[Message]) -> list[BaseMessage]:
+    prompt_value = RAG_ANSWER_PROMPT.invoke(
+        {
+            "context":format_context(chunks),
+            "question":question,
+            "history":history_to_message(history)
+        }
+    )
+    return list(prompt_value.to_messages())
+
+REFUSAL_ANSWER = "抱歉，知识库中没有找到与该问题相关的可靠依据"
 
