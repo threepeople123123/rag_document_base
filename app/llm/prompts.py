@@ -38,7 +38,7 @@ _SYSTEM_PROMPT = """
     {context}
 """
 
-RAG_ANSWER_PROMPT = ChatPromptTemplate.format_messages(
+RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system",_SYSTEM_PROMPT),
         MessagesPlaceholder("chat_history",optional=True),
@@ -53,12 +53,12 @@ def format_context(chunks:list[RetrievalChunk]) -> str:
     parts: list[str] = []
     for index , chunk in enumerate(chunks,start =1):
         mate = f"来自{chunk.document_name}"
-        if not chunk.page_no:
+        if chunk.page_no:
             mate += f"，第{chunk.page_no}页"
-        if not chunk.section_path:
+        if chunk.section_path:
             mate += f",第{chunk.section_path}章节"
         parts.append(f"【片段{index}】({mate}),\n{chunk.content}")
-    return "\n\n ---- \n\m".join(parts)
+    return "\n\n ---- \n\n".join(parts)
 
 
 def history_to_message(history:list[Message]) ->list[BaseMessage]:

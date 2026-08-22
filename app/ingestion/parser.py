@@ -1,8 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 import io
 
-from docling.document_converter import DocumentConverter
-from docling_core.types.io import DocumentStream
 from langchain_core.documents import Document
 
 from app.core.exceptions import AppException
@@ -16,18 +16,22 @@ class DocumentParserError(AppException):
     http_status = 400
 
 # 解析器
-_converter:DocumentConverter | None = None
+_converter: DocumentConverter | None = None
 
 # 获取解析器
-def _get_converter()->DocumentConverter:
+def _get_converter() -> DocumentConverter:
     global _converter
     if _converter is None:
+        # docling 导入很重（约 10s+），放在这里惰性加载，避免拖慢应用启动
+        from docling.document_converter import DocumentConverter
         _converter = DocumentConverter()
     return _converter
 
 # 解析方法
-def _convertor_sync(filename:str,content:bytes)->str:
-    source = DocumentStream(name=filename,stream=io.BytesIO(content))
+def _convertor_sync(filename: str, content: bytes) -> str:
+    from docling_core.types.io import DocumentStream
+
+    source = DocumentStream(name=filename, stream=io.BytesIO(content))
     result = _get_converter().convert(source)
     return result.document.export_to_markdown()
 
