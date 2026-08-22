@@ -5,12 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
-from app.db.models import Conversation, Message
+from app.db.models import Conversation, Message, AnswerCitation
 from app.db.session import AsyncSessionLocal
 from app.repositories.citation_repo import AnswerCitationRepository
 from app.repositories.conversation_repo import ConversationRepository
 from app.retrieval.vector_retrieval import RetrievalChunk
-from app.workflows.nodes import normalize_query, __all__
+from app.workflows.nodes import normalize_query
 from app.workflows.nodes.load_context import load_context
 from app.workflows.nodes.retrieve import retrieve
 from app.workflows.nodes.stream_generate import stream_generate
@@ -69,7 +69,7 @@ class ChatService:
                 state.update(await normalize_query(state))
 
                 # user消息落库
-                await _persist_user_message(state,session)
+                await self._persist_user_message(state,session)
 
                 yield {
                     "event":"message_start",
@@ -112,7 +112,7 @@ class ChatService:
                     state["answer"] = "".join(answer_parts)
 
                 # assistant 消息 + citations 同事务落地
-                await _persist_assistant_message(state,session)
+                await self._persist_assistant_message(state,session)
 
                 yield {
                     "event":"message_end",
@@ -149,5 +149,25 @@ class ChatService:
         assistant_msg = ConversationRepository.make_assistant_message(state["conversation_id"],state["answer"])
         await conv_repo.add_message([assistant_msg])
         await session.commit()
+
+        if not state["refused"]:
+            citations = [
+                AnswerCitation(
+                    message_id=assistant_msg.id,
+                    ordinal=ordinal,
+                    document_id=chunk.document_id,
+                    document_name=chunk.document_name,
+                    chunk_id=chunk.chunk_id,
+                    page_no=chunk.page_no
+                    ,quote=chunk.content,
+                )
+                for ordinal , chunk in enumerate(state["retrieved_chunks"])
+            ]
+            await answer_repo.bulk_add(citations)
+        await session.commit()
+        state["assistant_message_id"] = assistant_msg.id
+
+
+
 
 
