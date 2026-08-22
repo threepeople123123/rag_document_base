@@ -115,9 +115,11 @@ class Message(Base):
     id : Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),primary_key=True,default=uuid4)
     conversation_id : Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),ForeignKey("conversation.id",ondelete="CASCADE"),nullable=False,index=True)
 
-    role : Mapped[MessageRole] = mapped_column("metadata",JSONB,nullable=False,default=dict)
+    role : Mapped[MessageRole] = mapped_column(String(16),nullable=False)
+    content : Mapped[str] = mapped_column(Text,nullable=False)
+    extra_metadata:Mapped[dict] = mapped_column("metadata",JSONB,nullable=False,default=dict)
     conversation : Mapped[Conversation] =  relationship(
-        back_populates="message"
+        back_populates="messages"
     )
     citations:Mapped[list["AnswerCitation"]] = relationship(
         back_populates="message",
@@ -139,10 +141,10 @@ class AnswerCitation(Base):
                                                   index=True)
     ordinal: Mapped[int] = mapped_column(Integer,nullable=False)
     document_id: Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),
-                                             ForeignKey("document.id", ondelete="SET NULL"), nullable=False,
+                                             ForeignKey("document.id", ondelete="SET NULL"), nullable=True,
                                              index=True)
     chunk_id: Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),
-                                              ForeignKey("document_chunks.id", ondelete="SET NULL"), nullable=False,
+                                              ForeignKey("document_chunks.id", ondelete="SET NULL"), nullable=True,
                                               index=True)
     document_name : Mapped[str] = mapped_column(String(512),nullable=False)
     page_no : Mapped[int | None] = mapped_column(Integer,nullable=True)

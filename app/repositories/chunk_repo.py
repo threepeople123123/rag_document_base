@@ -4,8 +4,8 @@ from uuid import UUID
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.db.models import DocumentChunk
+from sqlalchemy.orm import selectinload
+from app.db.models import DocumentChunk, Document, DocumentStatus
 
 
 @dataclass(frozen=True)
@@ -98,3 +98,25 @@ class DocumentChunkRepository:
             ,min_length=int(row.min_len or 0)
             ,max_length=int(row.max_len or 0)
         )
+
+
+    async def vector_search(self,query_embedding:list[float],top_k:int) -> list[tuple[DocumentChunk,float]]:
+        """
+        查询向量
+        :param query_embedding: 向量
+        :param top_k:  取多少条
+        :return: 返回  top_k  数据
+        """
+        distance = DocumentChunk.embedding.cosine_distance(query_embedding)
+
+        stmt = (
+            select(DocumentChunk,distance.label("distance"))
+            .join(DocumentChunk,Document.id == DocumentChunk.document_id)
+            .where(Document.status == DocumentStatus.READY.value)
+            .order_by(distance.asc())
+            .limit(top_k)
+            .options(selectinload(DocumentChunk.document))
+        )
+
+        result = (await self.session.execute(stmt)).all()
+        return [(chunk,float(dist)) for chunk ,dist in result]
