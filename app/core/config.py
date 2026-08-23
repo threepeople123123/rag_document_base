@@ -17,7 +17,7 @@ class Setting(BaseSettings):
     # 定义你要读取的配置项，字段名就是环境变量名
     app_name: str = "rag-document-base"
     debug: bool = False
-    DATABASE_URL:str = "127.0.0.1"
+    DATABASE_URL:str = "postgresql+asyncpg://postgres:wangjian020426@8.140.219.233:5433/rag_document_base"
     LOG_LEVER:int = 1
 
     MINIO_ENDPOINT:str = "http://8.140.219.233:9000"
@@ -49,6 +49,9 @@ class Setting(BaseSettings):
     RETRIEVAL_TOP_K:str = ""
     RETRIEVAL_MIN_SCORE:str =""
     CHAT_HISTORY_WINDOW:str =""
+
+    QUERY_ROUTE_ENABLED:bool = True
+    MULTI_QUERY_COUNT:int = 3
 
 
 

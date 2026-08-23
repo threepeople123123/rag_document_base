@@ -1,0 +1,31 @@
+# 启动：  POSTGRES_PASSWORD=你的强密码 docker compose up -d --build
+# 停止：  docker compose down
+# 数据卷：pgdata（删除容器数据不丢；想清空重建：docker compose down -v）
+services:
+  pg-rag:
+    build:
+      context: .
+    image: pg-rag:17
+    container_name: pg-rag
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      # 也可在同目录 .env 文件里写 POSTGRES_PASSWORD=xxx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: rag_fts
+      TZ: Asia/Shanghai
+    ports:
+      # 宿主机 5433 -> 容器 5432；若宿主机没有旧 PG 占用 5432，可改回 "5432:5432"
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_fts"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgdata:

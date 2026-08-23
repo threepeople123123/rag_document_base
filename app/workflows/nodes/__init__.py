@@ -5,4 +5,5 @@ __all__ = [
     ,"normalize_query"
     ,"retrieve"
     , "stream_generate"
+    ,"query_rewrite"
 ]

@@ -1,11 +1,11 @@
 from datetime import datetime
 from enum import Enum
-from uuid import UUID, uuid4
+from uuid import uuid4
+
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import String, Text, DateTime, func, BigInteger, ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql.types import PGUuid
 from sqlalchemy.orm import Mapped, relationship
 from sqlalchemy.orm import mapped_column
 
@@ -31,7 +31,7 @@ class DocumentStatus(str,Enum):
 # document 表对应的实体类
 class Document(Base):
     __tablename__ = "document"
-    id : Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),primary_key=True,default=uuid4)
+    id : Mapped[UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid4)
     name : Mapped[str] = mapped_column(String(512),nullable= False)
     file_hash : Mapped[str] = mapped_column(String(64),nullable=False)
     mime_type : Mapped[str] = mapped_column(String(128),nullable=False)
@@ -58,9 +58,9 @@ class Document(Base):
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
-    id : Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),primary_key=True,default=uuid4)
+    id : Mapped[UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid4)
     document_id : Mapped[UUID] = mapped_column(
-        PGUuid(as_uuid=True)
+        UUID(as_uuid=True)
         ,ForeignKey("document.id"
         ,ondelete="CASCADE")
         ,nullable= False
@@ -91,7 +91,7 @@ class MessageRole(str,Enum):
 
 class Conversation(Base):
     __tablename__ = "conversation"
-    id : Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),primary_key=True,default=uuid4)
+    id : Mapped[UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid4)
     title : Mapped[str] = mapped_column(String(128),nullable=False,default="新对话")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -112,8 +112,8 @@ class Conversation(Base):
 
 class Message(Base):
     __tablename__ = "message"
-    id : Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),primary_key=True,default=uuid4)
-    conversation_id : Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),ForeignKey("conversation.id",ondelete="CASCADE"),nullable=False,index=True)
+    id : Mapped[UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid4)
+    conversation_id : Mapped[UUID] = mapped_column(UUID(as_uuid=True),ForeignKey("conversation.id",ondelete="CASCADE"),nullable=False,index=True)
 
     role : Mapped[MessageRole] = mapped_column(String(16),nullable=False)
     content : Mapped[str] = mapped_column(Text,nullable=False)
@@ -135,15 +135,15 @@ class Message(Base):
 
 class AnswerCitation(Base):
     __tablename__ = "answer_citation"
-    id: Mapped[UUID] = mapped_column(PGUuid(as_uuid=True), primary_key=True, default=uuid4)
-    message_id: Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    message_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True),
                                                   ForeignKey("message.id", ondelete="CASCADE"), nullable=False,
                                                   index=True)
     ordinal: Mapped[int] = mapped_column(Integer,nullable=False)
-    document_id: Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),
+    document_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True),
                                              ForeignKey("document.id", ondelete="SET NULL"), nullable=True,
                                              index=True)
-    chunk_id: Mapped[UUID] = mapped_column(PGUuid(as_uuid=True),
+    chunk_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True),
                                               ForeignKey("document_chunks.id", ondelete="SET NULL"), nullable=True,
                                               index=True)
     document_name : Mapped[str] = mapped_column(String(512),nullable=False)

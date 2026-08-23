@@ -16,6 +16,8 @@ class ConversationRepository:
     async def crate(self,title:str = "新对话")->Conversation:
         conversation = Conversation(title=title)
         self.session.add(conversation)
+        # 先 flush 执行 INSERT 生成主键，refresh 才能从数据库重新加载
+        await self.session.flush()
         await self.session.refresh(conversation)
         return conversation
 
@@ -50,7 +52,8 @@ class ConversationRepository:
         if not message:
             return None
         self.session.add_all(message)
-        return await self.session.refresh(message)
+        # flush 使 INSERT 生效并生成主键；refresh 只接受单个已持久化实例，不能传列表
+        await self.session.flush()
 
     @staticmethod
     def make_user_message(conversation_id:UUID,content:str)->Message:
