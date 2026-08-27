@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import cast, delete, func, select
+from sqlalchemy.dialects.postgresql import REGCONFIG
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.db.models import DocumentChunk, Document, DocumentStatus
@@ -111,7 +112,7 @@ class DocumentChunkRepository:
 
         stmt = (
             select(DocumentChunk,distance.label("distance"))
-            .join(DocumentChunk,Document.id == DocumentChunk.document_id)
+            .join(Document,Document.id == DocumentChunk.document_id)
             .where(Document.status == DocumentStatus.READY.value)
             .order_by(distance.asc())
             .limit(top_k)
@@ -120,3 +121,33 @@ class DocumentChunkRepository:
 
         result = (await self.session.execute(stmt)).all()
         return [(chunk,float(dist)) for chunk ,dist in result]
+
+    async def keyword_search(self, query: str, top_k: int) -> list[tuple[DocumentChunk, float]]:
+        """
+        关键字全文检索（zhparser 中文分词），按 ts_rank 相关性分数从高到低返回。
+
+        :param query: 用户关键字，按 chinese_zhparser 配置自动分词，多词默认 AND 语义
+        :param top_k: 返回条数
+        :return: [(DocumentChunk, score), ...]，score 越大越相关
+        """
+        if not query or not query.strip():
+            return []
+
+        # 显式 cast 成 regconfig，避免驱动对参数类型的推断问题
+        config = cast("chinese_zhparser", REGCONFIG)
+        tsv = func.to_tsvector(config, DocumentChunk.content)
+        tsq = func.plainto_tsquery(config, query)
+        score = func.ts_rank(tsv, tsq).label("score")
+
+        stmt = (
+            select(DocumentChunk, score)
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .where(Document.status == DocumentStatus.READY.value)
+            .where(tsv.op("@@")(tsq))
+            .order_by(score.desc())
+            .limit(top_k)
+            .options(selectinload(DocumentChunk.document))
+        )
+
+        result = (await self.session.execute(stmt)).all()
+        return [(chunk, float(s)) for chunk, s in result]

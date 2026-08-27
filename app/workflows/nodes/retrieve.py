@@ -1,23 +1,23 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.llm.prompts import REFUSAL_ANSWER
-from app.retrieval.vector_retrieval import VectorRetrieval
+from app.retrieval.hybrid_retrieval import HybridRetrieval
+from app.retrieval.vector_retrieval import RetrievalChunk
 from app.workflows.rag_state import RAGState
 
 
 async def retrieve(state:RAGState,session:AsyncSession) -> RAGState:
-    retrieval = VectorRetrieval(session)
+    multi_queries = state["multi_queries"]
+    query = state["query"]
+    retrieval_top_k = settings.RETRIEVAL_TOP_K
+    final_top_k = settings.FINAL_TOP_K
 
-    chunks = await retrieval.search(state["query"],top_k=settings.CHAT_HISTORY_WINDOW)
+    update= {"query":query,"multi_queries":multi_queries,}
+    retrieval:list[RetrievalChunk] | None = None
+    if multi_queries:
+        #循环检索
+        for multi_query in multi_queries:
+            hybrid_retrieval = HybridRetrieval()
+            retrieval:list[RetrievalChunk] = await hybrid_retrieval.search(query,retrieval_top_k,final_top_k)
 
-    refused = not chunks or chunks[0].score < settings.RETRIEVAL_MIN_SCORE
-
-    update:RAGState = {
-        "retrieved_chunks":chunks,
-        "refused":refused
-    }
-    if refused:
-        update["answer"] = REFUSAL_ANSWER
-
-    return update
+    return RAGState(retrieved_chunks=retrieval)

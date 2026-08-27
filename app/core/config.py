@@ -46,12 +46,16 @@ class Setting(BaseSettings):
     CHAT_API_KEY:str="sk-0363d3e4787e4ab19253e56309e0ff95"
     CHAT_BASE_URL:str = ""
     CHAT_MODEL:str = ""
-    RETRIEVAL_TOP_K:str = ""
+    MINI_CHAT_MODEL: str = ""
+    RETRIEVAL_TOP_K:int = 5
     RETRIEVAL_MIN_SCORE:str =""
     CHAT_HISTORY_WINDOW:str =""
+    FINAL_TOP_K:int=5
 
     QUERY_ROUTE_ENABLED:bool = True
     MULTI_QUERY_COUNT:int = 3
+
+    RRF_K: int = 60
 
 
 

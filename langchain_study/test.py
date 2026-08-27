@@ -1,14 +1,23 @@
+import base64
+
+from langchain.agents import create_agent
 from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
+from langgraph.prebuilt import ToolRuntime
+from pydantic import Field, BaseModel
 
 from app.llm.models import get_chat_model
 
 
 @tool
-def get_weather(location: str) -> str:
+def get_weather(location: str,runtime: ToolRuntime) -> str:
     """获取某个位置的天气。"""
+    messages = runtime.state["messages"]
+
+    human_msgs = sum(1 for m in messages if m.__class__.__name__ == "HumanMessage")
+    ai_msgs = sum(1 for m in messages if m.__class__.__name__ == "AIMessage")
+    tool_msgs = sum(1 for m in messages if m.__class__.__name__ == "ToolMessage")
     return f"{location} 天气晴朗。"
 
 model = get_chat_model()
@@ -97,11 +106,40 @@ ai_message = []
 init_message = HumanMessage("北京的天气怎么样")
 while(True):
     for chunk in  model_with_tools.stream(messages):
-        if chunk.tool_calls:
-            chunk["name"]
-            chunk["id"]
-            chunk["args"]
-
+        print(f"{chunk}")
     break
 
+with open("test.jpeg", "rb") as f:
+    image_data = f.read()
+
+# 编码为 base64 字符串
+base64_str = base64.b64encode(image_data).decode("utf-8")
+
+
+message = HumanMessage(
+    content=[
+        {"type": "text", "text": "Describe the content of this image."},
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{base64_str}"},
+        },
+    ]
+)
+
+
+image_response = model.invoke([message])
+print(image_response.content)
+
+@tool
+def summarize_conversation(
+    runtime: ToolRuntime
+) -> str:
+    """Summarize the conversation so far."""
+    messages = runtime.state["messages"]
+
+    human_msgs = sum(1 for m in messages if m.__class__.__name__ == "HumanMessage")
+    ai_msgs = sum(1 for m in messages if m.__class__.__name__ == "AIMessage")
+    tool_msgs = sum(1 for m in messages if m.__class__.__name__ == "ToolMessage")
+
+    return f"Conversation has {human_msgs} user messages, {ai_msgs} AI responses, and {tool_msgs} tool results"
 

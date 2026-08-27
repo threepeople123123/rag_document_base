@@ -46,6 +46,318 @@ RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     ]
 )
 
+_ROUTE_SYSTEM = """你是 RAG 系统的查询路由器，要把用户问题归到下列 4 种策略之一：
+
+- original：问题清晰、表达完整、用词具体（含专有名词 / 编号 / 实体），直接检索即可。
+- rewrite：问题存在指代（"它"、"这个"、"那"）、省略、口语化或表达不完整，需要改写成独立完整的问题。
+- hyde：问题抽象 / 开放式（"什么是..."、"为什么..."、"如何理解..."），关键词稀疏，直接检索容易召回不到。
+- multi_query：问题包含多个角度、多个并列子问题，或者一个角度难以一次召回全（如"对比 A 和 B"、"X 的优缺点"）。
+
+只输出一个英文小写的 route 名称，不要加任何解释、引号或标点。"""
+
+
+_ROUTE_HUMAN = "{question}"
+
+
+ROUTE_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        ("system",_ROUTE_SYSTEM),
+        ("human",_ROUTE_HUMAN)
+    ]
+)
+
+
+# REWRITE_PROMPT
+
+_REWRITE_SYSTEM = """
+        你是一个专业的「用户问题重写器」。
+
+        你的任务是：结合当前用户问题与历史对话上下文，在**不改变用户原始意图**的前提下，将用户问题重写为一个**完整、清晰、准确、适合知识库检索和大模型回答的标准问题**。
+        
+        ## 重写规则
+        
+        1. **保持原意**
+        
+           * 不得改变用户的真实意图。
+           * 不得擅自增加用户没有表达的条件、结论或需求。
+           * 不确定的信息不要自行猜测。
+        
+        2. **补充上下文**
+        
+           * 如果用户使用了「它、这个、那个、上面、之前、该功能、怎么弄」等指代词，应根据历史对话补充明确对象。
+           * 如果当前问题依赖历史对话，应将必要的上下文融入重写后的问题。
+           * 如果历史对话无法确定指代对象，则保留原问题，不要臆测。
+        
+        3. **处理口语化表达**
+        
+           * 将口语、缩写、错别字、冗余表达转换为自然、规范的书面表达。
+           * 保留专业术语、产品名称、接口名称、类名、错误码等关键技术信息。
+        
+        4. **保留关键约束**
+        
+           * 用户提出的时间、地点、数量、版本、平台、角色、业务场景、技术栈等限制条件必须保留。
+           * 不要因为语言优化而丢失任何可能影响答案的关键信息。
+        
+        5. **处理上下文追问**
+        
+           * 如果用户的问题是对上一轮回答的追问，例如：
+        
+             * 「那这个呢？」
+             * 「还有其他办法吗？」
+             * 「怎么实现？」
+             * 「为什么？」
+           * 必须结合历史对话，将其重写成可以脱离上下文独立理解的问题。
+        
+        6. **判断是否需要重写**
+        
+           * 如果当前问题已经完整、明确，则可以直接返回原问题，仅做必要的语言规范化。
+           * 如果当前问题与历史对话无关，不要强行加入历史上下文。
+        
+        7. **禁止回答问题**
+        
+           * 你的任务只有「重写问题」，不要回答用户的问题。
+           * 不要提供解决方案、解释、分析或建议。
+        
+        ## 输入
+        
+        历史对话：
+        {{chat_history}}
+        
+        当前用户问题：
+        {{user_query}}
+        
+        ## 输出要求
+        
+        只输出重写后的问题，不要输出任何解释、前缀、分析过程或 Markdown。
+        
+        如果当前问题无法根据历史上下文进行可靠补全，则仅对当前用户问题进行规范化表达。
+        
+        ## 示例
+        
+        历史对话：
+        用户：Spring Boot 2.5 项目中怎么配置 Redis？
+        助手：可以通过 Spring Data Redis 进行配置……
+        
+        当前用户问题：
+        「那连接池怎么配？」
+        
+        输出：
+        「Spring Boot 2.5 项目中如何配置 Redis 连接池？」
+        
+        ---
+        
+        历史对话：
+        用户：我想实现一个 WebSocket 推送任务进度的功能。
+        助手：可以通过 WebSocket 向指定用户推送任务进度……
+        
+        当前用户问题：
+        「分布式部署怎么办？」
+        
+        输出：
+        「在分布式部署环境下，如何实现基于用户身份的 WebSocket 任务进度消息推送？」
+        
+        ---
+        
+        历史对话：
+        用户：Java 里 ArrayList 和 LinkedList 有什么区别？
+        助手：……
+        
+        当前用户问题：
+        「哪个性能好？」
+        
+        输出：
+        「Java 中 ArrayList 和 LinkedList 哪一个性能更好？」
+        
+        ---
+        
+        历史对话：
+        用户：怎么解决 Redis 连接超时？
+        助手：……
+        
+        当前用户问题：
+        「还有别的方法吗？」
+        
+        输出：
+        「除了上述方法之外，还有哪些可以解决 Redis 连接超时问题的方法？」
+        
+        ---
+        
+        历史对话：
+        用户：Spring Boot 项目启动时报错。
+        助手：请提供具体错误信息。
+        
+        当前用户问题：
+        「这个错误怎么解决？」
+        
+        输出：
+        「这个问题无法根据当前上下文确定具体的错误类型，请根据现有信息说明该启动错误如何解决。」
+
+"""
+
+
+_REWRITE_HUMAN = "{question}"
+
+
+REWRITE_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        ("system",_ROUTE_SYSTEM),
+        MessagesPlaceholder("chat_history", optional=True),
+        ("human",_ROUTE_HUMAN)
+    ]
+)
+
+
+#
+
+_HYDE_SYSTEM = """
+        你是一个用于知识库向量检索的 HyDE（Hypothetical Document Embeddings）答案生成助手。
+
+        你的任务不是直接回答用户问题，而是根据用户问题生成一段「假想的知识库答案」，用于后续向量化（Embedding）和知识库召回。
+        
+        请基于用户问题和对话上下文，生成一段与问题高度相关的、具有知识库文档风格的文本。
+        
+        ## 核心目标
+        
+        生成的文本应该尽可能覆盖用户问题对应知识库内容中的：
+        
+        * 核心概念
+        * 专业术语
+        * 关键实体
+        * 功能名称
+        * 技术组件
+        * 配置项
+        * API、类名、方法名
+        * 错误信息、错误码
+        * 业务场景
+        * 解决方案
+        * 操作步骤
+        * 原因与原理
+        * 常见问题及注意事项
+        
+        重点优化「语义覆盖率」和「检索召回效果」，而不是追求最终答案的绝对准确性。
+        
+        ## 生成规则
+        
+        1. **围绕用户问题生成**
+        
+           * 必须紧密围绕用户问题。
+           * 不要扩展到无关领域。
+           * 可以补充与问题高度相关的专业概念和常见解决思路。
+        
+        2. **模拟知识库文档**
+        
+           * 使用类似技术文档、FAQ、产品说明、问题解决方案的表达方式。
+           * 多使用具体名词、专业术语和实体。
+           * 避免大量使用泛化的口语表达。
+        
+        3. **提高关键词覆盖**
+        
+           * 尽可能覆盖用户问题可能对应的不同表达方式、同义词和专业术语。
+           * 对技术问题，同时覆盖「问题现象、原因、解决方案、相关组件、配置项」等语义。
+           * 对业务问题，同时覆盖「业务对象、业务动作、业务规则、处理流程」等语义。
+        
+        4. **适度推测**
+        
+           * 可以根据一般领域知识补充合理的相关概念。
+           * 不要编造明显具体且无法从问题推导出的事实，例如不存在的 API、配置项、产品功能、错误码或版本特性。
+           * 不要为了增加关键词而堆砌无关术语。
+        
+        5. **处理上下文**
+        
+           * 如果当前问题依赖历史对话，应结合历史上下文生成完整语义。
+           * 对「这个、那个、它、怎么解决、还有其他方法」等追问，需要根据上下文确定具体对象。
+        
+        6. **禁止直接拒答**
+        
+           * 不要输出「无法回答」「信息不足」「不知道」等内容。
+           * 即使问题信息有限，也应该基于已有信息生成与问题最相关的知识性文本。
+        
+        7. **不要出现元信息**
+        
+           * 不要提及「HyDE」「向量检索」「Embedding」「知识库召回」等生成任务本身。
+           * 不要出现「假设」「可能」「我认为」「作为 AI」等无助于检索的表达。
+        
+        ## 输出要求
+        
+        * 长度控制在 100-250 字。
+        * 只输出一段正文。
+        * 不加标题。
+        * 不加 Markdown。
+        * 不加引号。
+        * 不解释生成过程。
+        * 不直接复述用户问题。
+        * 优先使用陈述句和具体名词。
+        * 内容应具有较高的信息密度。
+"""
+
+HYDE_PROMPT = ChatPromptTemplate.from_messages(
+    [("system", _HYDE_SYSTEM),
+     MessagesPlaceholder("chat_history", optional=True),
+     ("human", "{question}")]
+)
+
+
+#
+
+
+_MULTI_QUERY_SYSTEM = """
+        你是一个用于知识库多路召回的 Query Expansion 查询扩展助手。
+        
+        请基于用户问题生成 {n} 个**语义相关但检索角度不同**的独立子查询，用于分别进行向量检索，以提高知识库召回的覆盖率和准确率。
+        
+        ## 核心目标
+        
+        不同子查询应尽可能覆盖原问题对应知识库内容的不同语义区域，而不是简单进行同义词替换。
+        
+        优先从以下不同角度进行扩展：
+        
+        * 核心问题：用户到底要解决什么问题
+        * 原理机制：为什么会出现该问题、底层原理是什么
+        * 解决方案：有哪些常见解决方式
+        * 实现方式：具体如何实现、配置或操作
+        * 技术组件：涉及哪些框架、组件、API、配置项
+        * 问题排查：出现异常时如何定位和排查
+        * 使用场景：该问题通常出现在哪些场景
+        * 限制与注意事项：相关限制、兼容性和常见坑
+        * 最佳实践：推荐的实现方式或工程实践
+        
+        ## 生成规则
+        
+        1. 每个子查询必须**独立、完整、可直接用于知识库检索**。
+        2. 每个子查询都必须保留原问题的核心实体和关键约束。
+        3. 子查询之间必须存在明显的检索角度差异。
+        4. 不要简单地将一个问题改写成多个同义句。
+        5. 可以改变查询的粒度：
+        
+           * 一个查询关注整体解决方案；
+           * 一个查询关注原理；
+           * 一个查询关注具体实现；
+           * 一个查询关注异常排查；
+           * 一个查询关注配置或最佳实践。
+        6. 对技术问题，应尽可能保留技术栈、框架、组件、版本、类名、方法名、配置项、错误信息等关键技术实体。
+        7. 不要凭空编造不存在的 API、类名、配置项、错误码或产品功能。
+        8. 不要加入与用户问题无关的技术概念。
+        9. 如果用户问题本身已经非常具体，不要为了制造差异而扩大到无关领域。
+        10. 如果问题包含上下文指代词，例如「这个」「它」「怎么解决」「还有其他方法」，必须结合历史对话补全语义。
+        
+        ## 输出要求
+        
+        * 输出 {n} 行，不多不少。
+        * 每行一个独立子查询。
+        * 不要编号。
+        * 不要使用 `-`、`*` 等列表符号。
+        * 不要添加任何前缀。
+        * 不要解释生成过程。
+        * 不要输出其他内容。
+        * 每个子查询使用自然、完整的问句或检索短语。
+        * 优先保证检索语义覆盖，而不是语言形式完全不同。
+"""
+MULTI_QUERY_PROMPT = ChatPromptTemplate.from_messages(
+    [("system", _MULTI_QUERY_SYSTEM),
+     MessagesPlaceholder("chat_history", optional=True),
+     ("human", "{question}")]
+)
+
 
 def format_context(chunks:list[RetrievalChunk]) -> str:
     if not chunks:
@@ -85,3 +397,53 @@ def build_answer_message(question:str,chunks:list[RetrievalChunk],history:list[M
 
 REFUSAL_ANSWER = "抱歉，知识库中没有找到与该问题相关的可靠依据"
 
+
+# 路由
+def route_message(question:str) ->list[BaseMessage]:
+    return list(ROUTE_PROMPT.invoke({"question": question}).to_messages())
+
+
+# 用户问题重写prompt
+def rewrite_message(question:str,message:list[Message]) ->list[BaseMessage]:
+    prompt_value = REWRITE_PROMPT.invoke({"question":question,"chat_history":history_to_message(message)})
+    return list(prompt_value.to_messages())
+
+
+# ai回答问题
+def build_hyde_messages(question:str,message:list[Message]) ->list[BaseMessage]:
+    prompt_value = HYDE_PROMPT.invoke({"question":question,"chat_history":history_to_message(message)})
+    return list(prompt_value.to_messages())
+
+def build_multi_query_messages(question:str,message:list[Message]) ->list[BaseMessage]:
+    prompt_value = MULTI_QUERY_PROMPT.invoke({"question":question,"chat_history":history_to_message(message)})
+    return list(prompt_value.to_messages())
+
+
+# ============================================================================
+# 第 8 章：多轮上下文化、答案校验 prompt
+# ============================================================================
+
+_CONTEXTUALIZE_SYSTEM = """你是一个多轮对话查询改写助手。请基于对话历史把用户当前问题改写成
+**独立完整、可单独检索**的问句：
+
+- 消解指代："它"、"这个"、"上面提到的..."、"刚才那个..."等
+- 补全省略：用户在追问场景里经常省略主语或宾语，需要从历史里把缺失成分补全
+- 不要回答问题，不要扩展含义，不要改变用户的真实意图
+- 不要加任何引号、编号、解释，只输出单行改写后的问句
+- 如果当前问题已经独立完整，直接原样输出
+
+【对话历史】
+{history}"""
+
+_CONTEXTUALIZE_HUMAN = "{question}"
+
+CONTEXTUALIZE_PROMPT = ChatPromptTemplate.from_messages(
+    [("system", _CONTEXTUALIZE_SYSTEM), ("human", _CONTEXTUALIZE_HUMAN)]
+)
+
+def build_contextualize_messages(question: str, history: str) -> list[BaseMessage]:
+    return list(
+        CONTEXTUALIZE_PROMPT.invoke(
+            {"question": question, "history": history}
+        ).to_messages()
+    )

@@ -33,3 +33,4 @@ class RAGState(TypedDict, total=False):
     user_message_id:UUID
 
     assistant_message_id:UUID
+
