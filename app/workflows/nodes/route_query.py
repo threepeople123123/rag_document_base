@@ -12,6 +12,7 @@ async def route_query(state: rag_state.RAGState)-> rag_state.RAGState:
     question = state["question"]
     multi_query_count = settings.MULTI_QUERY_COUNT
 
+    # 节点路由，根据不同的返回走不同的节点
     route_result =  await get_query_rewriter().optimize(question,chat_history,multi_query_count)
 
     update: rag_state.RAGState = {"route": route_result.route, "query": route_result.query}

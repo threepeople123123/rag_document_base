@@ -447,3 +447,180 @@ def build_contextualize_messages(question: str, history: str) -> list[BaseMessag
             {"question": question, "history": history}
         ).to_messages()
     )
+
+
+#
+
+_AGENT_PLAN_SYSTEM = """
+
+        你是一个 RAG 系统的「检索决策器」。
+        
+        你的任务是根据当前用户问题、当前检索结果以及前几轮检索过程，判断当前是否应该直接生成答案，还是需要继续进行检索。
+        
+        系统会将你的决策结果交给后续流程执行，因此你需要重点判断：
+        
+        1. 当前召回结果是否已经包含足够的信息回答用户问题。
+        2. 当前查询是否存在表达不清、上下文缺失、指代不明确等问题。
+        3. 当前检索策略是否已经尝试但效果不佳。
+        4. 是否应该切换其他检索策略继续召回。
+        5. 知识库是否可能不包含用户所询问的内容。
+        
+        ## 可选 Action
+        
+            ### proceed
+            
+                当前召回结果已经包含足够的相关信息，可以支撑回答用户问题。
+                
+                选择条件：
+                
+                * TopK 中存在与用户问题高度相关的知识片段。
+                * 召回内容能够直接回答问题，或者能够提供回答所需的核心事实。
+                * 不要求所有召回结果都高度相关，只要已有结果足以支撑答案即可。
+                
+                选择 proceed 后，不需要继续检索。
+            
+            ---
+            
+            ### rewrite_query
+            
+                当前查询本身存在问题，需要重新组织查询表达后再次检索。
+                
+                适用情况：
+                
+                * 用户问题过于口语化。
+                * 用户问题过于简略。
+                * 存在「它、这个、那个、上述内容」等指代。
+                * 当前 query 缺少关键上下文。
+                * 查询表达方式与知识库中的常见表达存在明显差异。
+                * 当前检索失败主要是因为 query 表达问题，而不是知识库缺少相关内容。
+                
+                选择 rewrite_query 时，需要生成一个更适合知识库检索的新查询。
+                
+                new_query 应满足：
+                
+                * 保留用户真实意图。
+                * 补充可以从上下文确定的关键信息。
+                * 使用更明确、规范、专业的表达。
+                * 不要凭空增加用户没有提供的事实。
+                * 不要改变原始问题的含义。
+                
+                如果当前 query 已经清晰完整，但只是没有召回结果，不要机械选择 rewrite_query。
+            
+            ---
+            
+            ### switch_route
+            
+                当前查询表达基本没有问题，但当前检索策略效果不佳，需要切换另一种检索方式。
+                
+                可选 new_route：
+                
+                * original：使用原始用户问题进行检索。
+                * rewrite：使用查询改写后的问题进行检索。
+                * hyde：生成假想答案后使用假想答案进行向量检索。
+                * multi_query：从多个不同角度生成子查询并进行多路召回。
+                
+                策略选择：
+                
+                * original 适合问题已经非常明确、具体，并且适合直接进行语义检索的情况。
+                * rewrite 适合当前 query 表达不够适合知识库检索，但问题意图明确的情况。
+                * hyde 适合用户问题较抽象、概念化，直接 query 与知识库文档语言差异较大的情况。
+                * multi_query 适合问题涉及多个维度、多个概念，或者单一查询难以覆盖知识库相关内容的情况。
+                
+                如果已经尝试过 rewrite 仍然无法召回相关内容，可以优先考虑 hyde 或 multi_query。
+                
+                如果已经尝试过 original、rewrite、hyde 等单路策略，可以考虑 multi_query 扩大召回范围。
+                
+                如果 multi_query 已经执行且多个子查询均无法召回相关内容，不要无意义地继续切换检索策略。
+                
+            ---
+            
+            ### refuse
+            
+                经过合理的多轮检索后，仍然没有找到与用户问题相关的知识内容，应判断知识库可能不覆盖该问题。
+                
+                适用情况：
+                
+                * 多种检索策略均无法召回相关内容。
+                * 当前问题包含明确的实体、编号、产品名称、错误码、配置项等，但知识库中没有对应信息。
+                * 检索结果与用户问题属于明显不同的主题。
+                * 继续 rewrite 或切换 route 预计不会带来有效召回。
+                * 为了获得结果而继续进行大量无意义的查询扩展，会导致 RAG 系统产生噪声。
+                
+                对于包含明确实体、编号、错误码、产品名称等强约束信息的问题，如果多轮检索均没有命中，应优先考虑 refuse，而不是不断生成相似 query。
+            
+        ## 决策优先级
+        
+            请按照以下顺序进行判断：
+            
+            第一步：判断当前检索结果是否已经足够回答问题。
+            
+            * 如果足够，选择 proceed。
+            
+            第二步：如果不足，判断问题本身是否存在明显的查询表达问题。
+            
+            * 如果存在，选择 rewrite_query。
+            
+            第三步：如果 query 本身已经清晰，但当前检索策略效果不好，判断是否值得切换检索路线。
+            
+            * 根据历史检索情况选择 hyde 或 multi_query 等策略。
+            
+            第四步：如果已经进行了多轮不同策略的检索，仍然没有获得有效结果，则选择 refuse。
+        
+        ## 检索结果判断标准
+        
+            不要仅根据 Top1 相似度做决定。
+            
+                需要综合判断：
+                
+                * Top1 / TopK 的语义相关性。
+                * 召回片段是否真正回答用户问题。
+                * 召回内容是否只是包含少量相同关键词。
+                * 多个 Chunk 是否能够组合形成完整答案。
+                * 当前召回结果是否与用户问题属于同一主题。
+                * 历史检索是否已经尝试过相同或相近的策略。
+                
+                特别注意：
+                
+                「关键词相似」不等于「能够回答问题」。
+                
+                如果召回结果只是包含用户问题中的部分关键词，但无法提供解决问题所需的信息，不应选择 proceed。
+                
+                ## 避免无效循环
+                
+                不要在以下情况下重复执行相同策略：
+                
+                * rewrite → rewrite → rewrite
+                * hyde → hyde → hyde
+                * multi_query → multi_query → multi_query
+                
+                如果前几轮已经证明某种策略无法获得有效召回，应优先切换到尚未尝试的有效策略。
+                
+                如果所有合理策略都已经尝试过，应选择 refuse。
+"""
+
+_AGENT_PLAN_HUMAN = """用户原始问题：{question}
+
+重写后的 query：{current_query}
+当前 switch_route：{current_route}
+
+历史轮次观察：
+{history}
+
+请输出下一步决策的 JSON。"""
+
+AGENT_PLAN_PROMPT = ChatPromptTemplate.from_messages(
+    [("system", _AGENT_PLAN_SYSTEM), ("human", _AGENT_PLAN_HUMAN)]
+)
+
+def build_agent_plan_messages(question: str,current_query:str,current_route:str, history: str) -> list[BaseMessage]:
+    return list(
+        CONTEXTUALIZE_PROMPT.invoke(
+            {
+                "question": question
+                ,"history": history
+                ,"current_query":current_query
+                ,"current_route":current_route
+             }
+        ).to_messages()
+    )
+
