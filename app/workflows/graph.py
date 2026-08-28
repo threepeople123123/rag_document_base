@@ -10,13 +10,15 @@ from app.workflows.rag_state import RAGState
 
 
 def _after_plan(state:RAGState)->str:
-    refused = state["refused"]
+    # RAGState 是 total=False 的 TypedDict，refused 键只在 plan_retrieval
+    # 走 refuse 分支时才会写入；其他分支没有该键，直接下标会 KeyError。
+    refused = state.get("refused", False)
     if refused:
         return "refuse"
     return "retrieve"
 
 def _after_retrieve(state:RAGState)->str:
-    retrieved_chunks = state["retrieved_chunks"]
+    retrieved_chunks = state.get("retrieved_chunks") or []
     if len(retrieved_chunks) <= 0:
         return "refuse"
     return "retrieve"

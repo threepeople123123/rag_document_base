@@ -42,10 +42,11 @@ def get_chat_model(mini_chat_model:bool=False)->BaseChatModel:
             api_key=settings.CHAT_API_KEY
             ,temperature=0
             ,streaming=True,
-            reasoning = {
-            "effort": None,  # Default None; can be "low", "medium", or "high"
-            "summary": "auto",  # Can be "auto", "concise", or "detailed"
-            },
+            # 注意：阿里云 MaaS compatible-mode 是 OpenAI 兼容端点，不是 OpenAI 官方
+            # reasoning 模型。配 reasoning 会触发 langchain-openai 走 Responses API
+            # (/responses)，而该端点对 structured outputs(parsed 字段)支持不完整，
+            # 导致 with_structured_output 解析失败。统一强制走 chat completions。
+            use_responses_api=False,
             rate_limiter=rate_limiter,
             # 注意：config 不是 ChatOpenAI 的构造参数（它只属于 invoke/stream 的调用期配置），
             # 传进去会被塞进 model_kwargs 导致 "unexpected keyword argument 'config'"。
@@ -54,6 +55,7 @@ def get_chat_model(mini_chat_model:bool=False)->BaseChatModel:
             #   model.invoke("...", config={"run_name": "joke_generation"})
             tags=["humor", "demo"],          # 用于分类的标签
             metadata={"user_id": "123"},     # 自定义元数据
+            max_tokens=10000,
             # callbacks=[MyCallbackHandler()], # 回调处理程序（必须是 BaseCallbackHandler 实例）
         )
         return _chat_mini_model
@@ -67,10 +69,7 @@ def get_chat_model(mini_chat_model:bool=False)->BaseChatModel:
             api_key=settings.CHAT_API_KEY
             ,temperature=0
             ,streaming=True,
-            reasoning = {
-            "effort": None,  # Default None; can be "low", "medium", or "high"
-            "summary": "auto",  # Can be "auto", "concise", or "detailed"
-            },
+            use_responses_api=False,
             rate_limiter=rate_limiter,
             # 注意：config 不是 ChatOpenAI 的构造参数（它只属于 invoke/stream 的调用期配置），
             # 传进去会被塞进 model_kwargs 导致 "unexpected keyword argument 'config'"。

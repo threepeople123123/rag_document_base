@@ -85,6 +85,7 @@ class ChatService:
                     answer_parts: list[str] = []
                     async for delta in stream_generate(state):
                         answer_parts.append(delta)
+                        print(f"ai返回消息：{delta}")
                         yield {
                             "event": "token",
                             "data": {
@@ -104,7 +105,7 @@ class ChatService:
                     }
                 }
             except Exception as e:
-                logger.error("失败：",e)
+                logger.error(f"失败：{e}")
                 await session.rollback()
                 yield {
                     "event":"error",

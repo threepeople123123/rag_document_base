@@ -614,7 +614,7 @@ AGENT_PLAN_PROMPT = ChatPromptTemplate.from_messages(
 
 def build_agent_plan_messages(question: str,current_query:str,current_route:str, history: str) -> list[BaseMessage]:
     return list(
-        CONTEXTUALIZE_PROMPT.invoke(
+        AGENT_PLAN_PROMPT.invoke(
             {
                 "question": question
                 ,"history": history

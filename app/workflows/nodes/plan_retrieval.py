@@ -44,10 +44,10 @@ async def plan_retrieval(state: RAGState) -> RAGState:
     # rewritten_query =  state["rewritten_query"]
     # hyde_answer =  state["hyde_answer"]
     agent_steps = list(state.get("agent_steps") or [])
-    multi_queries = state.get("multi_queries")
-    route = state.get("route") or "original"
-    rewritten_query = state.get("rewritten_query")
-    hyde_answer = state.get("hyde_answer")
+    multi_queries = state.get("multi_queries",None)
+    route = state.get("route","original")
+    rewritten_query = state.get("rewritten_query",None)
+    hyde_answer = state.get("hyde_answer",None)
 
     # ============================================================
     # [修正] 原代码在 if not agent_steps 分支里 append 后直接 return，
@@ -97,7 +97,7 @@ async def plan_retrieval(state: RAGState) -> RAGState:
 
     messages = build_agent_plan_messages(question=query,current_route=route,current_query=rewritten_query,history=history)
 
-    structured_model = get_chat_model().with_structured_output(RetrievalDecision)
+    structured_model = get_chat_model().with_structured_output(RetrievalDecision, method="function_calling")
 
     # [修正] 原代码是同步 invoke，在 async 函数里会阻塞事件循环，改用 ainvoke
     # retrieval_decision =  structured_model.invoke(messages)
@@ -145,7 +145,7 @@ async def plan_retrieval(state: RAGState) -> RAGState:
             route=target_route,
             question=query,
             message=state.get("chat_history") or [],  # apply_route 的 message 是必传参数
-            multi_query_count=settings.multi_query_count,
+            multi_query_count=settings.MULTI_QUERY_COUNT,
         )
         new_route = result.route
         new_query = result.query

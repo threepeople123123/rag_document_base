@@ -51,7 +51,7 @@ class Setting(BaseSettings):
     RERANK_TOP_K:int=5
     RERANK_MODEL_NAME: str =""
     RETRIEVAL_MIN_SCORE:str =""
-    CHAT_HISTORY_WINDOW:str =""
+    CHAT_HISTORY_WINDOW:int = 10
     FINAL_TOP_K:int=20
 
     QUERY_ROUTE_ENABLED:bool = True
