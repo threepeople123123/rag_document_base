@@ -10,6 +10,7 @@ from app.db.session import AsyncSessionLocal
 from app.repositories.citation_repo import AnswerCitationRepository
 from app.repositories.conversation_repo import ConversationRepository
 from app.retrieval.vector_retrieval import RetrievalChunk
+from app.workflows.graph import get_rag_graph
 from app.workflows.nodes import normalize_query
 from app.workflows.nodes.load_context import load_context
 from app.workflows.nodes.retrieve import retrieve
@@ -66,31 +67,12 @@ class ChatService:
                 }
 
                 state.update(await load_context(state,session))
-                state.update(await normalize_query(state))
 
                 # user消息落库
                 await self._persist_user_message(state,session)
 
-                yield {
-                    "event":"message_start",
-                    "data":{
-                        "user_message_id":str(state["user_message_id"])
-                    }
-                }
-
-                state.update(await retrieve(state,session))
-
-                citations_payload = [
-                    _serialize_citation(c,ordinal=i)
-                    for i ,c in enumerate(state.get("retrieved_chunks",[]),start=1)
-                ]
-
-                yield {
-                    "event":"citations",
-                    "data": {
-                        "cications" : citations_payload
-                    }
-                }
+                final_state = await get_rag_graph().ainvoke(state)
+                state.update(final_state)
 
                 if state.get("refused"):
                     yield {

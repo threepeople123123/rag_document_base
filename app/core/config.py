@@ -47,10 +47,12 @@ class Setting(BaseSettings):
     CHAT_BASE_URL:str = ""
     CHAT_MODEL:str = ""
     MINI_CHAT_MODEL: str = ""
-    RETRIEVAL_TOP_K:int = 5
+    RETRIEVAL_TOP_K:int = 20
+    RERANK_TOP_K:int=5
+    RERANK_MODEL_NAME: str =""
     RETRIEVAL_MIN_SCORE:str =""
     CHAT_HISTORY_WINDOW:str =""
-    FINAL_TOP_K:int=5
+    FINAL_TOP_K:int=20
 
     QUERY_ROUTE_ENABLED:bool = True
     MULTI_QUERY_COUNT:int = 3

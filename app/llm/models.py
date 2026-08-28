@@ -56,7 +56,7 @@ def get_chat_model(mini_chat_model:bool=False)->BaseChatModel:
             metadata={"user_id": "123"},     # 自定义元数据
             # callbacks=[MyCallbackHandler()], # 回调处理程序（必须是 BaseCallbackHandler 实例）
         )
-        return _chat_min_model
+        return _chat_mini_model
     else:
         global _chat_model
         if _chat_model is not None:
@@ -82,6 +82,7 @@ def get_chat_model(mini_chat_model:bool=False)->BaseChatModel:
             # callbacks=[MyCallbackHandler()], # 回调处理程序（必须是 BaseCallbackHandler 实例）
         )
         return _chat_model
+
 
 
 system_msg = SystemMessage("You are a helpful assistant.")
